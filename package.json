@@ -1,0 +1,31 @@
+{
+  "name": "@nghyane/agy-sdk",
+  "version": "0.1.0",
+  "description": "Unofficial TypeScript SDK for the Antigravity CLI (agy) headless mode — sessions, streaming events, typed steps and quota awareness.",
+  "keywords": ["antigravity", "agy", "agent", "sdk", "automation", "typescript"],
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/fake-proc.d.ts",
+      "import": "./dist/testing/fake-proc.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
