@@ -48,21 +48,26 @@ const batches = chunk(cues, 40);
 const translated: Cue[] = [];
 
 for (const [batchIndex, batch] of batches.entries()) {
-  const payload = batch.map((cue) => cue.text).join("\n<<<>>>\n");
+  const payload = JSON.stringify(batch.map((cue) => cue.text));
   const result = await runtime.step<TranslatedChunk>({
     prompt: [
       "Translate the subtitle lines below to Vietnamese.",
-      "Rules: keep the exact number of lines separated by <<<>>>; keep names and onomatopoeia;",
-      "keep each line short enough for subtitles; return JSON only.",
+      `Return JSON only, exactly this shape: {"lines": [...]} with ${batch.length} strings, same order.`,
+      "Keep names and onomatopoeia; keep each line short enough for subtitles.",
       "",
-      payload,
+      `Input JSON array: ${payload}`,
     ].join("\n"),
     schema: {
       type: "object",
       properties: { lines: { type: "array", items: { type: "string" } } },
       required: ["lines"],
     },
-    validate: (value) => (value.lines.length === batch.length ? null : `expected ${batch.length} lines, got ${value.lines.length}`),
+    validate: (value) => {
+      if (!Array.isArray(value.lines)) return "lines must be an array of strings";
+      if (value.lines.length !== batch.length) return `expected ${batch.length} lines, got ${value.lines.length}`;
+      if (!value.lines.every((line) => typeof line === "string")) return "every line must be a string";
+      return null;
+    },
     maxAttempts: 3,
     timeoutMs: 300_000,
   });

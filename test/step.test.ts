@@ -48,6 +48,29 @@ test("step throws a protocol error after exhausting attempts", async () => {
   );
 });
 
+test("step treats a throwing validator as a retryable problem", async () => {
+  let calls = 0;
+  const spawn = fakeSpawn((_args, proc) => {
+    calls += 1;
+    setImmediate(() => {
+      proc.stdout.write(envelope({ response: JSON.stringify({ wrong: true }), structured_output: { wrong: true } }) + "\n");
+      proc.exit(0);
+    });
+  });
+  const runtime = createRuntime({ spawn });
+  await assert.rejects(
+    runtime.step<{ lines: string[] }>({
+      prompt: "Return lines",
+      schema: { type: "object" },
+      validate: (value) => (value.lines.length === 2 ? null : "expected 2 lines"),
+      maxAttempts: 2,
+      timeoutMs: 2_000,
+    }),
+    (error: unknown) => error instanceof AgyError && error.kind === "protocol" && /validator threw/.test(error.message),
+  );
+  assert.equal(calls, 2);
+});
+
 test("step falls back to JSON parsing when structured_output is absent", async () => {
   const spawn = fakeSpawn((_args, proc) => {
     setImmediate(() => {

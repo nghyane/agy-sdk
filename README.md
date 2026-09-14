@@ -151,6 +151,18 @@ try {
 
 `kind` is one of `spawn | auth | quota | model | timeout | protocol | run`.
 
+## Data handling
+
+The SDK is a local process wrapper, nothing more:
+
+- No network calls, no telemetry, no analytics — the only network traffic is `agy` itself.
+- No filesystem access: conversations and config live in the account's `HOME` and are managed by `agy`.
+- `response` values are passed through verbatim; nothing is rewritten. `step()` derives a typed
+  value for validation but returns or rejects the original result untouched.
+- The only content that leaves the process is `onWarning` output for unrecognized stream lines
+  (truncated). Disable it with `createRuntime({ onWarning: () => {} })`, or consume raw events
+  via `session.send()` if you want zero interpretation.
+
 ## How it works
 
 ```

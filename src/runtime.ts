@@ -97,6 +97,15 @@ interface RuntimeContext {
 const DEFAULT_TIMEOUT_MS = 300_000;
 const MAX_LINE_PREVIEW = 160;
 
+async function runValidator<T>(opts: StepOptions<T>, value: T): Promise<string | null> {
+  if (!opts.validate) return null;
+  try {
+    return await opts.validate(value);
+  } catch (error) {
+    return `validator threw: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
 function truncate(text: string): string {
   const single = text.replace(/\s+/g, " ").trim();
   return single.length > MAX_LINE_PREVIEW ? `${single.slice(0, MAX_LINE_PREVIEW)}…` : single;
@@ -381,7 +390,7 @@ export function createRuntime(options: RuntimeOptions = {}): Runtime {
         prompt = `${opts.prompt}\n\nPrevious attempt failed: ${lastProblem}\nReturn only valid JSON matching the schema.`;
         continue;
       }
-      const problem = opts.validate ? await opts.validate(value) : null;
+      const problem = await runValidator(opts, value);
       if (!problem) return value;
       lastProblem = problem;
       if (attempt === maxAttempts) {
