@@ -27,7 +27,8 @@ after a validation failure, watch quota. This SDK packages exactly that:
 ## Requirements
 
 - `agy` installed and authenticated once (`agy` interactive login).
-- Node.js **>= 22.6**.
+- Node.js **>= 22.6** to consume the built package. Developing this repo (tests run from TS
+  source) requires **>= 23.6**, where type stripping is enabled by default.
 - Runtime usage is subprocess-based: this SDK is ESM-only.
 
 ## Install
@@ -196,7 +197,7 @@ protocol/parse.ts       protocol/types.ts
 ## Testing
 
 ```bash
-npm test        # node:test + fixtures, no agy required
+npm test        # node:test + fixtures, no agy required (Node >= 23.6)
 npm run typecheck
 npm run build
 ```
