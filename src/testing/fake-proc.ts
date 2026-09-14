@@ -12,8 +12,8 @@ export class FakeProc extends EventEmitter {
   readonly writes: string[] = [];
   killedWith: NodeJS.Signals | null = null;
   readonly stdin: Writable;
-  readonly stdout = new PassThrough();
-  readonly stderr = new PassThrough();
+  readonly stdout: PassThrough = new PassThrough();
+  readonly stderr: PassThrough = new PassThrough();
   onWrite: ((chunk: string) => void) | null = null;
   #exited = false;
 
@@ -70,17 +70,24 @@ export function fakeSpawn(script: (args: string[], proc: FakeProc) => void): Spa
 }
 
 /** NDJSON builders matching real agy stream-json output. */
-export const fixture = {
-  init: (conversationId = "conv-1", extra: Record<string, unknown> = {}) =>
+export interface FixtureBuilders {
+  init: (conversationId?: string, extra?: Record<string, unknown>) => string;
+  text: (delta: string, conversationId?: string, state?: "ACTIVE" | "DONE") => string;
+  tool: (name: string, output: string, conversationId?: string) => string;
+  result: (response: string, conversationId?: string, extra?: Record<string, unknown>) => string;
+}
+
+export const fixture: FixtureBuilders = {
+  init: (conversationId = "conv-1", extra: Record<string, unknown> = {}): string =>
     JSON.stringify({ event: "init", conversation_id: conversationId, init: { cwd: "/tmp/work", tools: ["run_command"], ...extra } }),
 
-  text: (delta: string, conversationId = "conv-1", state: "ACTIVE" | "DONE" = "ACTIVE") =>
+  text: (delta: string, conversationId = "conv-1", state: "ACTIVE" | "DONE" = "ACTIVE"): string =>
     JSON.stringify({
       event: "step_update",
       step_update: { conversation_id: conversationId, step_index: 1, state, step_type: "agent_response", text_delta: delta },
     }),
 
-  tool: (name: string, output: string, conversationId = "conv-1") =>
+  tool: (name: string, output: string, conversationId = "conv-1"): string =>
     JSON.stringify({
       event: "step_update",
       step_update: {
@@ -93,7 +100,7 @@ export const fixture = {
       },
     }),
 
-  result: (response: string, conversationId = "conv-1", extra: Record<string, unknown> = {}) =>
+  result: (response: string, conversationId = "conv-1", extra: Record<string, unknown> = {}): string =>
     JSON.stringify({
       event: "result",
       result: {

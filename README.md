@@ -34,8 +34,11 @@ after a validation failure, watch quota. This SDK packages exactly that:
 ## Install
 
 ```bash
-# from GitHub until the package is published to npm
+# from Git (always available)
 npm install github:nghyane/agy-sdk
+
+# from JSR, once published (TS source, npm-compatible)
+npx jsr add @nghyane/agy-sdk
 ```
 
 ## Quick start
@@ -210,6 +213,14 @@ used by this repo, so downstream integrations can test without spawning the real
 - Hook middleware (pre/post tool decisions) with fail-closed semantics.
 - ACP bridge for editor clients.
 - Optional scheduler helpers (quota-aware queues, cooldowns).
+
+## Publishing
+
+- **JSR** — sign in at [jsr.io](https://jsr.io) with GitHub to create the `@nghyane` scope once,
+  then push a tag (`git tag v0.1.0 && git push --tags`). The `Publish JSR` workflow publishes
+  via GitHub OIDC, no tokens. Locally: `npx jsr publish`.
+- **npm** (optional) — `npm publish`; git installs already build via the `prepare` script.
+- Keep the version in `package.json` and `jsr.json` in sync.
 
 ## License
 
