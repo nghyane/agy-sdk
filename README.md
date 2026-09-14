@@ -77,6 +77,22 @@ console.log("gemini:", quota.gemini.fiveHour, "claude:", quota.claude.fiveHour);
 See [`examples/translate-srt.ts`](./examples/translate-srt.ts) for a full multi-step pipeline
 (parse SRT → chunked agent steps with validation → merge).
 
+## Examples
+
+| File | Shows |
+| --- | --- |
+| [`hello.ts`](./examples/hello.ts) | one-shot `run()` + token usage |
+| [`quota-guard.ts`](./examples/quota-guard.ts) | cron-friendly quota gate (`exit 2` = retry after reset) |
+| [`translate-srt.ts`](./examples/translate-srt.ts) | chunked SRT translation with strict per-chunk validation |
+| [`blog.ts`](./examples/blog.ts) | typed outline → per-section drafts → editor pass on the Claude pool |
+
+```bash
+node examples/hello.ts
+node examples/quota-guard.ts
+node examples/translate-srt.ts ep01.srt ep01.vi.srt
+node examples/blog.ts "How DNS resolution works"
+```
+
 ## API
 
 ### `createRuntime(options?)`
