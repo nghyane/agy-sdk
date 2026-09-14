@@ -1,82 +1,68 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { createRuntime } from "../src/index.ts";
 
-// Usage: node --experimental-strip-types examples/translate-srt.ts ep01.srt ep01.vi.srt [model]
+// File-first pipeline: the agent works on files inside an isolated workspace;
+// the SDK only stages inputs and validates outputs from disk (no JSON round-trips of content).
 //
-// Demonstrates the practical shape of an agy-sdk pipeline:
-//   deterministic parsing -> agent step per chunk (typed + validated) -> deterministic merge.
-
-interface Cue {
-  index: string;
-  time: string;
-  text: string;
-}
-
-interface TranslatedChunk {
-  lines: string[];
-}
+//   node examples/translate-srt.ts ep01.srt ep01.vi.srt [model]
+//
+// Headless notes (agy 1.2.x), verified:
+//   - print/session mode has no default workspace -> register one with --add-dir <dir>
+//   - file tools are soft-denied when approval cannot be prompted -> --dangerously-skip-permissions
+//     (pair with --sandbox to bound shell commands)
 
 const [input = "ep01.srt", output = "ep01.vi.srt", model = "gemini-3.8-flash-low"] = process.argv.slice(2);
-
-function parseSrt(content: string): Cue[] {
-  return content
-    .replace(/\r\n/g, "\n")
-    .split("\n\n")
-    .map((block) => block.split("\n"))
-    .filter((lines) => lines.length >= 2)
-    .map((lines) => ({
-      index: lines[0] ?? "0",
-      time: lines[1] ?? "",
-      text: lines.slice(2).join("\n"),
-    }));
-}
-
-function toSrt(cues: Cue[]): string {
-  return cues.map((cue) => `${cue.index}\n${cue.time}\n${cue.text}`).join("\n\n") + "\n";
-}
-
-function chunk<T>(items: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
-  return chunks;
-}
-
-const runtime = createRuntime({ model, effort: "low" });
 const source = await readFile(input, "utf8");
-const cues = parseSrt(source);
-const batches = chunk(cues, 40);
-const translated: Cue[] = [];
 
-for (const [batchIndex, batch] of batches.entries()) {
-  const payload = JSON.stringify(batch.map((cue) => cue.text));
-  const result = await runtime.step<TranslatedChunk>({
-    prompt: [
-      "Translate the subtitle lines below to Vietnamese.",
-      `Return JSON only, exactly this shape: {"lines": [...]} with ${batch.length} strings, same order.`,
-      "Keep names and onomatopoeia; keep each line short enough for subtitles.",
-      "",
-      `Input JSON array: ${payload}`,
-    ].join("\n"),
-    schema: {
-      type: "object",
-      properties: { lines: { type: "array", items: { type: "string" } } },
-      required: ["lines"],
-    },
-    validate: (value) => {
-      if (!Array.isArray(value.lines)) return "lines must be an array of strings";
-      if (value.lines.length !== batch.length) return `expected ${batch.length} lines, got ${value.lines.length}`;
-      if (!value.lines.every((line) => typeof line === "string")) return "every line must be a string";
-      return null;
-    },
-    maxAttempts: 3,
-    timeoutMs: 300_000,
+const workspace = await mkdtemp(join(tmpdir(), "agy-srt-"));
+try {
+  await writeFile(join(workspace, "input.srt"), source, "utf8");
+
+  const agy = createRuntime({
+    cwd: workspace,
+    model,
+    effort: "low",
+    extraArgs: ["--add-dir", workspace, "--dangerously-skip-permissions", "--sandbox"],
   });
 
-  for (const [i, cue] of batch.entries()) {
-    translated.push({ ...cue, text: result.lines[i] ?? cue.text });
-  }
-  console.error(`translated chunk ${batchIndex + 1}/${batches.length}`);
+  const result = await agy.run(
+    [
+      "Translate the subtitle text in input.srt to Vietnamese.",
+      "Keep cue numbers and timing lines byte-identical; keep names; keep each line short.",
+      "Write the result to output.srt in the same SRT format.",
+      "Reply with just the filename when done.",
+    ].join(" "),
+    { timeoutMs: 600_000 },
+  );
+  if (result.status !== "SUCCESS") throw new Error(`translate failed with status ${result.status}`);
+
+  const translated = await readFile(join(workspace, "output.srt"), "utf8");
+  assertSameCues(source, translated);
+  await writeFile(resolve(output), translated, "utf8");
+  console.error(`translated ${countCues(source)} cues -> ${output} (tokens: ${result.usage?.total_tokens})`);
+} finally {
+  await rm(workspace, { recursive: true, force: true });
 }
 
-await writeFile(output, toSrt(translated), "utf8");
-console.error(`wrote ${output}`);
+function countCues(text: string): number {
+  return text.replace(/\r\n/g, "\n").split("\n\n").filter((block) => block.trim() !== "").length;
+}
+
+function timingLines(text: string): string[] {
+  return text
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .filter((line) => line.includes("-->"));
+}
+
+function assertSameCues(source: string, translated: string): void {
+  if (!translated.trim()) throw new Error("translated file is empty");
+  if (countCues(source) !== countCues(translated)) throw new Error("cue count changed");
+  const before = timingLines(source);
+  const after = timingLines(translated);
+  if (before.length !== after.length || before.some((line, index) => line !== after[index])) {
+    throw new Error("timing lines changed");
+  }
+}

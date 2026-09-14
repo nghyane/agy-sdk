@@ -83,7 +83,7 @@ See [`examples/translate-srt.ts`](./examples/translate-srt.ts) for a full multi-
 | --- | --- |
 | [`hello.ts`](./examples/hello.ts) | one-shot `run()` + token usage |
 | [`quota-guard.ts`](./examples/quota-guard.ts) | cron-friendly quota gate (`exit 2` = retry after reset) |
-| [`translate-srt.ts`](./examples/translate-srt.ts) | chunked SRT translation with strict per-chunk validation |
+| [`translate-srt.ts`](./examples/translate-srt.ts) | file-first: agent reads/writes inside a temp workspace, SDK validates from disk |
 | [`blog.ts`](./examples/blog.ts) | typed outline → per-section drafts → editor pass on the Claude pool |
 
 ```bash
@@ -199,6 +199,32 @@ protocol/parse.ts       protocol/types.ts
 - One parser, one schema layer — no regex scattered across the codebase.
 - The spawn port is the only OS boundary, which is why the whole test suite runs on fixtures.
 - Errors are classified in one place (`errors.ts`), never by ad-hoc string matching.
+
+## Workspace & file-first workflows
+
+For content-heavy work, let the agent read and write files inside a workspace instead of
+round-tripping data through prompts and JSON responses. JSON stays for control data
+(decisions, small structured lists); artifacts live on disk.
+
+Verified behaviour of `agy` 1.2.x headless mode:
+
+- There is **no default workspace** in print/session mode — register one with `--add-dir <dir>`.
+- File tools and shell commands are **soft-denied** when approval cannot be prompted. Either add
+  `permissions.allow` rules in the account's `settings.json`, or pass
+  `--dangerously-skip-permissions` (pair it with `--sandbox` to bound shell commands).
+- Validate artifacts **from disk** after the run (cue counts, timing lines, diffs) — never parse
+  model prose for content.
+
+```ts
+const agy = createRuntime({
+  cwd: workspace,
+  extraArgs: ["--add-dir", workspace, "--dangerously-skip-permissions", "--sandbox"],
+});
+
+await agy.run("Translate input.srt to Vietnamese, write output.srt, keep timing byte-identical.");
+const translated = await readFile(join(workspace, "output.srt"), "utf8");
+assertSameCues(source, translated); // deterministic check, outside the model
+```
 
 ## Quota and cost notes (measured)
 
